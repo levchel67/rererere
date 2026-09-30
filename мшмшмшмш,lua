@@ -1,0 +1,165 @@
+-- LocalScript в StarterPlayerScripts
+-- Перетаскиваемая кнопка-переключатель анимации
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- ID анимации
+local ANIMATION_ID = "rbxassetid://107214136937273"
+
+--------------------------------------------------
+-- GUI
+--------------------------------------------------
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AnimToggleGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 220, 0, 60)
+frame.Position = UDim2.new(0.5, -110, 0.8, 0)
+frame.BackgroundTransparency = 1
+frame.Parent = screenGui
+
+local button = Instance.new("TextButton")
+button.Size = UDim2.new(1, 0, 1, 0)
+button.BackgroundColor3 = Color3.fromRGB(80, 80, 90)
+button.TextColor3 = Color3.fromRGB(255, 255, 255)
+button.Font = Enum.Font.GothamBold
+button.TextScaled = true
+button.Text = "Анимация: ВЫКЛ"
+button.AutoButtonColor = false
+button.Parent = frame
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = button
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(50, 50, 60)
+stroke.Thickness = 2
+stroke.Parent = button
+
+--------------------------------------------------
+-- Состояние
+--------------------------------------------------
+local isOn = false
+local currentTrack = nil
+
+--------------------------------------------------
+-- Перетаскивание
+--------------------------------------------------
+local dragging = false
+local dragStart = nil
+local startPos = nil
+local moved = false
+
+button.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        moved = false
+        dragStart = input.Position
+        startPos = frame.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if not dragging then return end
+    if input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch then
+
+        local delta = input.Position - dragStart
+        if delta.Magnitude > 5 then
+            moved = true
+        end
+
+        frame.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        if dragging and not moved then
+            toggleAnimation()
+        end
+        dragging = false
+    end
+end)
+
+--------------------------------------------------
+-- Анимация
+--------------------------------------------------
+local function startAnimation()
+    local character = player.Character or player.CharacterAdded:Wait()
+    local humanoid = character:WaitForChild("Humanoid")
+    local animator = humanoid:FindFirstChildOfClass("Animator")
+        or Instance.new("Animator", humanoid)
+
+    local animation = Instance.new("Animation")
+    animation.AnimationId = ANIMATION_ID
+
+    local ok, track = pcall(function()
+        return animator:LoadAnimation(animation)
+    end)
+
+    if not ok or not track then
+        warn("Не удалось загрузить анимацию:", ANIMATION_ID)
+        return false
+    end
+
+    track.Priority = Enum.AnimationPriority.Action
+    track.Looped = true
+    track:Play()
+
+    currentTrack = track
+    return true
+end
+
+local function stopAnimation()
+    if currentTrack then
+        currentTrack:Stop(0.2)
+        currentTrack = nil
+    end
+end
+
+--------------------------------------------------
+-- Переключение
+--------------------------------------------------
+function toggleAnimation()
+    isOn = not isOn
+
+    if isOn then
+        local ok = startAnimation()
+        if not ok then
+            isOn = false
+            return
+        end
+        button.Text = "Анимация: ВКЛ"
+        button.BackgroundColor3 = Color3.fromRGB(60, 170, 90)
+        stroke.Color = Color3.fromRGB(30, 100, 50)
+    else
+        stopAnimation()
+        button.Text = "Анимация: ВЫКЛ"
+        button.BackgroundColor3 = Color3.fromRGB(80, 80, 90)
+        stroke.Color = Color3.fromRGB(50, 50, 60)
+    end
+end
+
+--------------------------------------------------
+-- Респавн — перезапуск, если было включено
+--------------------------------------------------
+player.CharacterAdded:Connect(function()
+    if isOn then
+        task.wait(0.3)
+        stopAnimation()
+        startAnimation()
+    end
+end)
